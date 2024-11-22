@@ -102,21 +102,12 @@ class EasyExport {
             //0.6.5b: For Foundry 0.8+ use type not entity (deprecated)
             let metadata;
             let newCompendium;
-            if (EasyExport.isFoundryV8Plus) {
-                metadata = {
-                    package: "world",
-                    type: entity,
-                    label: filename         //so that you can work out which one to look at
-                }
-                newCompendium = await CompendiumCollection.createCompendium(metadata);
-            } else {
-                metadata = {
-                    package: "world",
-                    entity: entity,
-                    label: filename         //so that you can work out which one to look at
-                }
-                newCompendium = await Compendium.create(metadata);
+            metadata = {
+                package: "world",
+                type: entity,
+                label: filename         //so that you can work out which one to look at
             }
+            newCompendium = await CompendiumCollection.createCompendium(metadata);
 
             //Default string, unless we have a parameterized version
             let warning = `${game.i18n.localize("EE.ImportingCompendium.CONTENT1")} ${newCompendium.title} ${game.i18n.localize("EE.ImportingCompendium.CONTENT2")} ${values.length} ${entity}s`;
@@ -126,22 +117,16 @@ class EasyExport {
             ui.notifications.warn(warning);
             ui.notifications.info( game.i18n.localize("EE.ImportingCompendium.CONTENT4"));
 
-            if (EasyExport.isFoundryV8Plus) {
-                const options = {pack: newCompendium.collection}
-                newCompendium.documentClass.create(values, options).then(() => isReadyDialog(newCompendium));
-            } else { 
-                newCompendium.createEntity(values).then(() => isReadyDialog(newCompendium));
-            }
+            const options = {pack: newCompendium.collection}
+            newCompendium.documentClass.create(values, options).then(() => isReadyDialog(newCompendium));
         }
     }
 
-    static async importFullBackup(entityBackups, filename) {
-        for (const entity of entityBackups) {
-            //v0.5.1 If we can't decode entity, skip it
-            if (Object.keys(entity)) {
-                const entityName = Object.keys(entity)[0];
-                const constructedFilename = filename+"-"+entityName;
-                //Note this is not really recursive - it calls back to importFromJSON for each individual entity backup
+    static async importFullBackup(docBackups, filename) {
+        for (const doc of docBackups) {
+            if (Object.keys(doc)) {
+                const docName = Object.keys(doc)[0];
+                const constructedFilename = filename+"-"+docName;
                 EasyExport.importEntity(entity, constructedFilename);
             }
         }
@@ -240,15 +225,13 @@ function exportTree(writeFile=true) {
     const metadata = {
           world: game.world.id,
           system: game.system.id,
-          coreVersion: game.data.version,
-          systemVersion: game.system.data.version
+          coreVersion: game.version,
+          systemVersion: game.system.version
     };
 
-    for (let entity of this.documents) {
+    for (let doc of this.documents) {
         //For this version, convert to JSON and merge into one file
-        let data = duplicate(entity.data);
-        // Flag some metadata about where the entity was exported some - in case migration is needed later
-        //Redundant since we're storing this on every element
+        let data = doc.toObject();
         data.flags["exportSource"] = metadata;
 
         if (allData === null) {
@@ -257,10 +240,7 @@ function exportTree(writeFile=true) {
             allData += "," + JSON.stringify(data, null, 2);
         }
     }
-    //Prepend and append [] for array re-import
-    //0.6.5: In Foundry 0.8+ should use .documentName not .entity
-    const entity = this.documents[0]?.documentName;
-    allData = `{"${entity}":[`+allData+"]}";
+    allData = `{"${this.entryType}":[${allData}]}`;
     console.log(`Exported ${this.documents.length} of ${this.tabName}`);
 
     // Trigger file save procedure
@@ -276,9 +256,9 @@ function writeJSONToFile(filename, data) {
 
 function exportAll() {
     let fullBackupData = null;
-    for (const entity of Object.keys(SIDEBAR_TO_ENTITY)) {
-        const entityClass = ui[entity];     //Helpfully stores this mapping
-        const exportThisEntity = exportTree.bind(entityClass);
+    for (const doc of Object.keys(SIDEBAR_TO_ENTITY)) {
+        const docClass = ui[doc];     //Helpfully stores this mapping
+        const exportThisEntity = exportTree.bind(docClass);
         let {filename, allData} = exportThisEntity(false);
         if (fullBackupData === null) {
             fullBackupData = allData; 
